@@ -28,6 +28,7 @@
         }
         
         /* --- Game Element Styling with Embedded Images (Base64) --- */
+        /* --- THE FIX IS IN THIS SECTION --- */
         #player {
             width: 60px;
             height: 70px;
@@ -55,7 +56,11 @@
             width: 9px;
             height: 54px;
             position: absolute;
-            background-image: url('pb.png');
+            background-image: url('https://www.pngmart.com/files/23/Bullet-PNG-HD.png');
+            /* These properties were missing for the bullet but are important */
+            background-size: contain;
+            background-position: center;
+            background-repeat: no-repeat;
         }
 
         .enemy-bullet {
@@ -160,20 +165,15 @@
 
             // --- Main Game Flow ---
             function initGame() {
-                // ***** THE FIX IS HERE *****
-                // Step 1: Update the display state FIRST.
                 startMenu.style.display = 'none';
                 gameOverMenu.style.display = 'none';
                 gameContainer.style.display = 'block';
 
-                // Step 2: Now that the container is visible, reset game state.
-                // All calculations based on dimensions will now work correctly.
                 isGameOver = false;
                 score = 0;
                 scoreboard.textContent = `Score: 0`;
                 player.style.left = `${gameContainer.offsetWidth / 2 - player.offsetWidth / 2}px`;
 
-                // Step 3: Clear any old game elements and intervals.
                 clearInterval(playerFireInterval);
                 clearInterval(enemySpawnInterval);
                 clearInterval(enemyFireInterval);
@@ -181,7 +181,6 @@
                 [...document.querySelectorAll('.bullet, .enemy, .enemy-bullet')].forEach(el => el.remove());
                 bullets = []; enemies = []; enemyBullets = [];
 
-                // Step 4: Start the new game loops.
                 playerFireInterval = setInterval(createBullet, PLAYER_FIRE_RATE);
                 enemySpawnInterval = setInterval(createEnemy, ENEMY_SPAWN_RATE);
                 enemyFireInterval = setInterval(enemyFire, ENEMY_FIRE_RATE);
