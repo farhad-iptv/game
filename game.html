@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Fighter Jet Shooter</title>
+    <style>
+        /* --- Fullscreen Page & Game Container Styling --- */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* No scrollbars */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #000;
+            touch-action: none; /* Prevents touch gestures like pinch-zoom */
+        }
+
+        #game-container {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, #2c3e50, #1e2b38); /* Dark space/sky */
+            position: relative;
+            overflow: hidden;
+            cursor: none;
+            display: none; /* Hidden until game starts */
+        }
+        
+        /* --- Game Element Styling with Embedded Images (Base64) --- */
+        #player {
+            width: 60px;
+            height: 70px;
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-image: url('player.png');
+            background-size: contain;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .enemy {
+            width: 60px;
+            height: 45px;
+            position: absolute;
+            background-image: url('enemy.png');
+            background-size: contain;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .bullet {
+            width: 9px;
+            height: 54px;
+            position: absolute;
+            background-image: url('pb.png');
+        }
+
+        .enemy-bullet {
+            width: 25px;
+            height: 25px;
+            position: absolute;
+            background-image: url('eb.png');
+            background-size: contain;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        /* --- UI Overlays (Scoreboard, Menus) --- */
+        .ui-overlay {
+            position: absolute;
+            width: 100%;
+            color: white;
+            text-shadow: 2px 2px 4px #000;
+            user-select: none;
+        }
+
+        #scoreboard {
+            top: 20px;
+            left: 20px;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .menu {
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.75);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .menu h2 { font-size: 52px; margin-bottom: 20px; }
+        .menu p { font-size: 28px; margin-bottom: 30px; }
+        .menu button {
+            padding: 15px 30px;
+            font-size: 22px;
+            cursor: pointer;
+            border: 2px solid white;
+            border-radius: 8px;
+            background-color: transparent;
+            color: white;
+            transition: background-color 0.3s, color 0.3s;
+            margin: 10px;
+        }
+        .menu button:hover { background-color: white; color: black; }
+        
+        #game-over-menu { display: none; }
+    </style>
+</head>
+<body>
+
+    <div id="start-menu" class="menu ui-overlay">
+        <h2>Fighter Jet Shooter</h2>
+        <p>Move to control your jet. Firing is automatic.</p>
+        <button id="start-button">Start Game</button>
+        <button id="fullscreen-button">Toggle Fullscreen</button>
+    </div>
+
+    <div id="game-container">
+        <div id="player"></div>
+        <div id="scoreboard" class="ui-overlay">Score: 0</div>
+        
+        <div id="game-over-menu" class="menu ui-overlay">
+            <h2>Game Over</h2>
+            <p>Your Score: <span id="final-score">0</span></p>
+            <button id="restart-button">Restart Game</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // DOM References
+            const gameContainer = document.getElementById('game-container');
+            const player = document.getElementById('player');
+            const scoreboard = document.getElementById('scoreboard');
+            const startMenu = document.getElementById('start-menu');
+            const gameOverMenu = document.getElementById('game-over-menu');
+            const finalScoreEl = document.getElementById('final-score');
+            const startButton = document.getElementById('start-button');
+            const restartButton = document.getElementById('restart-button');
+            const fullscreenButton = document.getElementById('fullscreen-button');
+
+            // Game Settings
+            const PLAYER_FIRE_RATE = 200;
+            const BULLET_SPEED = 14;
+            const ENEMY_SPEED = 2;
+            const ENEMY_SPAWN_RATE = 1200;
+            const ENEMY_FIRE_RATE = 1800;
+
+            // Game State
+            let score, isGameOver;
+            let bullets, enemies, enemyBullets;
+            let playerFireInterval, enemySpawnInterval, enemyFireInterval, gameLoopInterval;
+
+            // --- Main Game Flow ---
+            function initGame() {
+                // ***** THE FIX IS HERE *****
+                // Step 1: Update the display state FIRST.
+                startMenu.style.display = 'none';
+                gameOverMenu.style.display = 'none';
+                gameContainer.style.display = 'block';
+
+                // Step 2: Now that the container is visible, reset game state.
+                // All calculations based on dimensions will now work correctly.
+                isGameOver = false;
+                score = 0;
+                scoreboard.textContent = `Score: 0`;
+                player.style.left = `${gameContainer.offsetWidth / 2 - player.offsetWidth / 2}px`;
+
+                // Step 3: Clear any old game elements and intervals.
+                clearInterval(playerFireInterval);
+                clearInterval(enemySpawnInterval);
+                clearInterval(enemyFireInterval);
+                clearInterval(gameLoopInterval);
+                [...document.querySelectorAll('.bullet, .enemy, .enemy-bullet')].forEach(el => el.remove());
+                bullets = []; enemies = []; enemyBullets = [];
+
+                // Step 4: Start the new game loops.
+                playerFireInterval = setInterval(createBullet, PLAYER_FIRE_RATE);
+                enemySpawnInterval = setInterval(createEnemy, ENEMY_SPAWN_RATE);
+                enemyFireInterval = setInterval(enemyFire, ENEMY_FIRE_RATE);
+                gameLoopInterval = setInterval(gameLoop, 16);
+            }
+
+            function endGame() {
+                isGameOver = true;
+                clearInterval(playerFireInterval);
+                clearInterval(enemySpawnInterval);
+                clearInterval(enemyFireInterval);
+                clearInterval(gameLoopInterval);
+                
+                finalScoreEl.textContent = score;
+                gameOverMenu.style.display = 'flex';
+            }
+
+            // Player Controls
+            function handlePlayerMove(e) {
+                if (isGameOver || gameContainer.style.display === 'none') return;
+                e.preventDefault();
+                const rect = gameContainer.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                let playerX = clientX - rect.left - (player.offsetWidth / 2);
+
+                if (playerX < 0) playerX = 0;
+                if (playerX > gameContainer.offsetWidth - player.offsetWidth) {
+                    playerX = gameContainer.offsetWidth - player.offsetWidth;
+                }
+                player.style.left = `${playerX}px`;
+            }
+
+            // Element Creation
+            function createBullet() {
+                const bullet = document.createElement('div');
+                bullet.className = 'bullet';
+                bullet.style.left = `${player.offsetLeft + player.offsetWidth / 2 - 4.5}px`;
+                bullet.style.top = `${player.offsetTop}px`;
+                gameContainer.appendChild(bullet);
+                bullets.push(bullet);
+            }
+
+            function createEnemy() {
+                const enemy = document.createElement('div');
+                enemy.className = 'enemy';
+                enemy.style.left = `${Math.random() * (gameContainer.offsetWidth - 60)}px`;
+                enemy.style.top = '-50px';
+                gameContainer.appendChild(enemy);
+                enemies.push(enemy);
+            }
+            
+            function enemyFire() {
+                if (isGameOver || enemies.length === 0) return;
+                const randomEnemy = enemies[Math.floor(Math.random() * enemies.length)];
+                
+                const bullet = document.createElement('div');
+                bullet.className = 'enemy-bullet';
+                bullet.style.left = `${randomEnemy.offsetLeft + randomEnemy.offsetWidth / 2 - 12.5}px`;
+                bullet.style.top = `${randomEnemy.offsetTop + randomEnemy.offsetHeight}px`;
+                gameContainer.appendChild(bullet);
+                enemyBullets.push(bullet);
+            }
+
+            // Game Loop and Logic
+            function gameLoop() {
+                if (isGameOver) return;
+                updatePositions();
+                checkCollisions();
+            }
+
+            function updatePositions() {
+                bullets.forEach((b, i) => {
+                    b.style.top = `${b.offsetTop - BULLET_SPEED}px`;
+                    if (b.offsetTop < -60) { b.remove(); bullets.splice(i, 1); }
+                });
+                enemies.forEach((e, i) => {
+                    e.style.top = `${e.offsetTop + ENEMY_SPEED}px`;
+                    if (e.offsetTop > gameContainer.offsetHeight) { e.remove(); enemies.splice(i, 1); }
+                });
+                enemyBullets.forEach((eb, i) => {
+                    eb.style.top = `${eb.offsetTop + BULLET_SPEED}px`;
+                    if (eb.offsetTop > gameContainer.offsetHeight) { eb.remove(); enemyBullets.splice(i, 1); }
+                });
+            }
+
+            function checkCollisions() {
+                const playerRect = player.getBoundingClientRect();
+                for (let i = bullets.length - 1; i >= 0; i--) {
+                    for (let j = enemies.length - 1; j >= 0; j--) {
+                        if (isColliding(bullets[i].getBoundingClientRect(), enemies[j].getBoundingClientRect())) {
+                            bullets[i].remove();
+                            enemies[j].remove();
+                            bullets.splice(i, 1);
+                            enemies.splice(j, 1);
+                            score += 10;
+                            scoreboard.textContent = `Score: ${score}`;
+                            break; 
+                        }
+                    }
+                }
+                const allThreats = [...enemyBullets, ...enemies];
+                for (const threat of allThreats) {
+                    if (isColliding(threat.getBoundingClientRect(), playerRect)) {
+                        endGame();
+                        return;
+                    }
+                }
+            }
+
+            function isColliding(rect1, rect2) {
+                return !(rect1.right < rect2.left || rect1.left > rect2.right || rect1.bottom < rect2.top || rect1.top > rect2.bottom);
+            }
+            
+            // Fullscreen API
+            function toggleFullscreen() {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(err => {
+                        alert(`Error enabling full-screen mode: ${err.message} (${err.name})`);
+                    });
+                } else if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+
+            // Event Listeners
+            startButton.addEventListener('click', initGame);
+            restartButton.addEventListener('click', initGame);
+            fullscreenButton.addEventListener('click', toggleFullscreen);
+            
+            document.addEventListener('mousemove', handlePlayerMove);
+            document.addEventListener('touchmove', handlePlayerMove, { passive: false });
+        });
+    </script>
+
+</body>
+</html>
